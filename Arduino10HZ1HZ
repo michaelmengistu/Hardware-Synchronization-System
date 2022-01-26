@@ -1,0 +1,92 @@
+
+#include <stdio.h>
+#include <stdlib.h> 
+
+#define OUTPUT_PIN 2  // 10Hz Output
+#define OUTPUT_PIN2 4 // 1Hz Output
+
+#define INPUT_PINGPS 8 // GPS PPS input
+
+// 10Hz Variables
+float frequency;        // Frequency
+float dutyCycle;      // Duty cycle (pulse width) percentage
+
+// 1Hz Variables
+int onehzCurrent;
+int onehzPeriod;
+int onehzDutyCycle;
+int onehzPhaseShift;
+int onehzBacksideCycle;
+
+
+void setup() {
+  Serial.begin(9600);
+  Serial.println();
+  Serial.println("Setting Up");
+  Serial.println();
+  pinMode(OUTPUT_PIN, OUTPUT);
+  pinMode(OUTPUT_PIN2, OUTPUT);
+  digitalWrite(OUTPUT_PIN, HIGH);
+
+  // Set the frequency and the duty cycle for the 10Hz. For most
+  // purposes you will want to leave the duty cycle set
+  // to 50%.
+  frequency = 10; // 10hz
+  dutyCycle = 50; // 10hz
+
+  // 1hz Variables
+  onehzCurrent = 0;
+  onehzPeriod = 10; // Set this to 10 because of the 10hz
+  onehzDutyCycle = 5; // 5 is 50 percent
+  onehzPhaseShift = 2; // Phase shift compared to start of the 10hz
+  onehzBacksideCycle = onehzPhaseShift + onehzDutyCycle;
+}
+
+// Initiates the next outputs for the 10hz and 1hz over the next second
+void HzOutput(){
+
+  // Calculate the period and the amount of time the output is on for (HIGH) and 
+  // off for (LOW).
+  double period = 1000000 / frequency;
+  double offFor = period - (period * (dutyCycle/100));
+  double onFor = period - offFor;
+
+  unsigned long curMillis = millis();
+
+  digitalWrite(OUTPUT_PIN, HIGH); // 10hz
+
+  // If the count of the 10hz is during the specified time of the 1hz then flip the
+  // 1hz output
+  if(onehzCurrent >= onehzPhaseShift and onehzCurrent < onehzBacksideCycle){
+    digitalWrite(OUTPUT_PIN2, HIGH);
+  } else {
+    digitalWrite(OUTPUT_PIN2, LOW);
+  }
+  
+  delay((long)onFor/1000);
+  
+  digitalWrite(OUTPUT_PIN, LOW);
+   
+  delay((long)offFor/1000);
+
+ // Keep count of the rising edges
+ onehzCurrent = onehzCurrent + 1;
+  if(onehzCurrent > onehzPeriod){
+    onehzCurrent = 1;
+    return; // If we did all 10 in the period stop and wait for next PPS input
+    
+  }else{
+    HzOutput(); // continue loop if we are still in the period
+  }
+
+}
+
+
+// Loop start of Program
+void loop() {
+
+  // Checks for the PPS from the GPS
+  if(digitalRead(INPUT_PINGPS)){
+    HzOutput();
+  }
+}
